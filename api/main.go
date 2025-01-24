@@ -48,6 +48,20 @@ var modelMapping = map[string]string{
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
+	// 强制设置User-Agent和其他必要的头部
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	
+	// 设置CORS头部
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	
+	// 处理OPTIONS请求
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if !strings.HasSuffix(r.URL.Path, "/v1/chat/completions") {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -76,13 +90,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	var req OpenAIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Request Format Error", http.StatusBadRequest)
+		fmt.Printf("Request Format Error: %v\n", err)
+		http.Error(w, fmt.Sprintf("Request Format Error: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	actualModel, exists := modelMapping[req.Model]
 	if !exists {
-		http.Error(w, "Unsupported Model", http.StatusBadRequest)
+		fmt.Printf("Unsupported Model: %s\n", req.Model)
+		http.Error(w, fmt.Sprintf("Unsupported Model: %s", req.Model), http.StatusBadRequest)
 		return
 	}
 
