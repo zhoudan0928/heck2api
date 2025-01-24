@@ -84,9 +84,6 @@ var modelMapping = map[string]string{
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	// 强制设置User-Agent和其他必要的头部
-	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	
 	// 设置CORS头部
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -148,9 +145,17 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := uuid.New().String()
 
+	// 设置通用响应头
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
+	w.Header().Set("Connection", "keep-alive")
+
 	if req.Stream {
+		w.Header().Set("Content-Type", "text/event-stream")
 		handleStreamResponse(w, question, sessionID, req.Messages, req.Model, actualModel)
 	} else {
+		w.Header().Set("Content-Type", "application/json")
 		handleNormalResponse(w, question, sessionID, req.Messages, req.Model, actualModel)
 	}
 }
@@ -159,6 +164,7 @@ func handleStreamResponse(w http.ResponseWriter, question, sessionID string, mes
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Transfer-Encoding", "chunked")
 
 	resp := makeHeckRequest(question, sessionID, messages, actualModel)
 	if resp.StatusCode != http.StatusOK {
@@ -198,6 +204,7 @@ func handleStreamResponse(w http.ResponseWriter, question, sessionID string, mes
 				}
 				data, _ := json.Marshal(chunk)
 				fmt.Fprintf(w, "data: %s\n\n", data)
+				w.(http.Flusher).Flush()
 				continue
 			}
 
@@ -217,6 +224,7 @@ func handleStreamResponse(w http.ResponseWriter, question, sessionID string, mes
 				}
 				data, _ := json.Marshal(chunk)
 				fmt.Fprintf(w, "data: %s\n\n", data)
+				w.(http.Flusher).Flush()
 				break
 			}
 
@@ -239,6 +247,7 @@ func handleStreamResponse(w http.ResponseWriter, question, sessionID string, mes
 				}
 				data, _ := json.Marshal(chunk)
 				fmt.Fprintf(w, "data: %s\n\n", data)
+				w.(http.Flusher).Flush()
 			}
 		}
 	}
@@ -246,6 +255,7 @@ func handleStreamResponse(w http.ResponseWriter, question, sessionID string, mes
 
 func handleNormalResponse(w http.ResponseWriter, question, sessionID string, messages []Message, requestModel, actualModel string) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Transfer-Encoding", "chunked")
 
 	resp := makeHeckRequest(question, sessionID, messages, actualModel)
 	scanner := bufio.NewScanner(resp.Body)
@@ -288,6 +298,7 @@ func handleNormalResponse(w http.ResponseWriter, question, sessionID string, mes
 	}
 
 	json.NewEncoder(w).Encode(response)
+	w.(http.Flusher).Flush()
 }
 
 func makeHeckRequest(question, sessionID string, messages []Message, actualModel string) *http.Response {
