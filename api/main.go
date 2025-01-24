@@ -24,6 +24,42 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+// UnmarshalJSON 自定义JSON解析方法
+func (m *Message) UnmarshalJSON(data []byte) error {
+	type Alias Message
+	aux := &struct {
+		Role    string      `json:"role"`
+		Content interface{} `json:"content"`
+	}{}
+	
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	
+	m.Role = aux.Role
+	
+	// 处理content字段
+	switch v := aux.Content.(type) {
+	case string:
+		m.Content = v
+	case []interface{}:
+		// 如果是数组，将所有元素连接成字符串
+		var contents []string
+		for _, item := range v {
+			if str, ok := item.(string); ok {
+				contents = append(contents, str)
+			}
+		}
+		m.Content = strings.Join(contents, "")
+	case nil:
+		m.Content = ""
+	default:
+		m.Content = fmt.Sprintf("%v", v)
+	}
+	
+	return nil
+}
+
 type OpenAIResponse struct {
 	ID      string   `json:"id"`
 	Object  string   `json:"object"`
